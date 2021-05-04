@@ -2,6 +2,7 @@
 from threading import Thread
 
 import cv2
+import argparse
 import gi
 import time
 
@@ -37,6 +38,12 @@ class FrameLoader:
     def get_frame(self):
         return self.last_frame
 
+    def get_size(self):
+        cap = cv2.VideoCapture(self.video_path)
+        width  = cap.get(cv2.CAP_PROP_FRAME_WIDTH)
+        height  = cap.get(cv2.CAP_PROP_FRAME_HEIGHT)
+        return int(width), int(height)
+
 
 class SensorFactory(GstRtspServer.RTSPMediaFactory):
     def __init__(self, frame_loader, **properties):
@@ -45,11 +52,12 @@ class SensorFactory(GstRtspServer.RTSPMediaFactory):
         self.frame_loader = frame_loader
         self.fps = 30
         self.duration = 1 / self.fps * Gst.SECOND  # duration of a frame in nanoseconds
+        self.width, self.height = frame_loader.get_size()
         self.launch_string = 'appsrc name=source is-live=true block=true format=GST_FORMAT_TIME ' \
-                             'caps=video/x-raw,format=BGR,width=1280,height=720,framerate={}/1 ' \
+                             'caps=video/x-raw,format=BGR,width={},height={},framerate={}/1 ' \
                              '! videoconvert ! video/x-raw,format=I420 ' \
                              '! x264enc speed-preset=ultrafast tune=zerolatency ' \
-                             '! rtph264pay config-interval=1 name=pay0 pt=96'.format(self.fps)
+                             '! rtph264pay config-interval=1 name=pay0 pt=96'.format(self.width, self.height, self.fps)
 
     def on_need_data(self, src, lenght):
         frame = self.frame_loader.get_frame()
@@ -75,25 +83,35 @@ class SensorFactory(GstRtspServer.RTSPMediaFactory):
         appsrc.connect('need-data', self.on_need_data)
 
 
-port = "8554"
-mount_point = "/test"
+
+if __name__ == '__main__':
+    args = argparse.ArgumentParser()
+    #create_indexes()
+    args.add_argument("-v", "--video_path", required=True, help="path of the video to streap")
+    args.add_argument("-p", "--port", required=False, default="8554", help="port to stream")
+
+    args = vars(args.parse_args())
+    video_path = args["video_path"]
+    port = args["port"]
 
 
-GObject.threads_init()
-Gst.init(None)
+    mount_point = "/stream"
 
-frame_loader = FrameLoader("vid.mp4").start()
-server = GstRtspServer.RTSPServer.new()
-factory = SensorFactory(frame_loader)
-# factory.set_shared(True)
+    GObject.threads_init()
+    Gst.init(None)
 
-server.set_service(port)
-mounts = server.get_mount_points()
-mounts.add_factory(mount_point, factory)
-server.attach()
+    frame_loader = FrameLoader(video_path).start()
+    server = GstRtspServer.RTSPServer.new()
+    factory = SensorFactory(frame_loader)
+    # factory.set_shared(True)
 
-#  start serving
-print ("stream ready at rtsp://127.0.0.1:" + port + "/test");
+    server.set_service(port)
+    mounts = server.get_mount_points()
+    mounts.add_factory(mount_point, factory)
+    server.attach()
 
-loop = GLib.MainLoop()
-loop.run()
+    #  start serving
+    print ("stream ready at rtsp://127.0.0.1:" + port + mount_point);
+
+    loop = GLib.MainLoop()
+    loop.run()
