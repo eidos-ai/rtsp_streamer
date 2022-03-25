@@ -5,6 +5,7 @@ import cv2
 import argparse
 import gi
 import time
+import os
 
 
 gi.require_version('Gst', '1.0')
@@ -31,8 +32,9 @@ class FrameLoader:
                 exist_frame, frame = cap.read()
                 if exist_frame:
                     self.last_frame = frame
-                    time.sleep(1 / 25)
+                    time.sleep(1.0/25)
                 else:
+                    print("restarting video")
                     cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
 
     def get_frame(self):
@@ -93,6 +95,9 @@ if __name__ == '__main__':
     args = vars(args.parse_args())
     video_path = args["video_path"]
     port = args["port"]
+
+    if not os.path.exists(video_path):
+        raise Exception("Video path doesn't exist")
 
 
     mount_point = "/stream"
