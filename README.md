@@ -9,4 +9,5 @@
 `python rtsp_stream.py -v video.mp4`
 
 To save the stream as a local video:
+
 `ffmpeg -i rtsp://127.0.0.1:8554/stream -acodec copy -vcodec copy abc.mp4`
